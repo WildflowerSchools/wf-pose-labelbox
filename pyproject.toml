@@ -6,8 +6,8 @@ dynamic = ["version"]
 name = "wf-pose-labelbox"
 version = "0.1.0"
 description = "Tools for creating Labelbox projects involving 2D and 3D pose data"
-authors = ["Theodore Quinn <ted.quinn@wildflowerschools.org"]
-maintainers = ["Theodore Quinn <ted.quinn@wildflowerschools.org"]
+authors = ["Theodore Quinn <ted.quinn@wildflowerschools.org>"]
+maintainers = ["Theodore Quinn <ted.quinn@wildflowerschools.org>"]
 readme = "README.md"
 keywords = []
 repository = "https://github.com/WildflowerSchools/wf-pose-labelbox"
@@ -23,6 +23,7 @@ classifiers = [
 [tool.poetry.dependencies]
 python = "^3.9"
 toml = "^0.10.2"
+pandas = ">=2.0"
 
 [tool.poetry.group.dev.dependencies]
 black = "^22.10.0"
