@@ -23,6 +23,7 @@ classifiers = [
 [tool.poetry.dependencies]
 python = "^3.9"
 toml = "^0.10.2"
+wf-honeycomb-io = ">=2.1.1"
 pandas = ">=2.0"
 
 [tool.poetry.group.dev.dependencies]
