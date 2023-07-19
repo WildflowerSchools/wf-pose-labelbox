@@ -1,18 +1,18 @@
 [project]
-name = "wf-project-name"
+name = "wf-pose-labelbox"
 dynamic = ["version"]
 
 [tool.poetry]
-name = "wf-project-name"
+name = "wf-pose-labelbox"
 version = "0.1.0"
-description = ""
-authors = ["NAME <EMAIL>"]
-maintainers = ["NAME <EMAIL>"]
+description = "Tools for creating Labelbox projects involving 2D and 3D pose data"
+authors = ["Theodore Quinn <ted.quinn@wildflowerschools.org"]
+maintainers = ["Theodore Quinn <ted.quinn@wildflowerschools.org"]
 readme = "README.md"
 keywords = []
-repository = "<<GITHUB URL>>"
+repository = "https://github.com/WildflowerSchools/wf-pose-labelbox"
 license = "MIT"
-packages = [{include = "MODULE_NAME"}]
+packages = [{include = "pose_labelbox"}]
 classifiers = [
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
@@ -21,7 +21,7 @@ classifiers = [
 ]
 
 [tool.poetry.dependencies]
-python = "^3.8"
+python = "^3.9"
 toml = "^0.10.2"
 
 [tool.poetry.group.dev.dependencies]
@@ -31,7 +31,7 @@ pytest = "^7.2.0"
 
 [tool.black]
 line-length = 120
-target-version = ['py38']
+target-version = ['py39']
 
 [tool.setuptools]
 py-modules = []

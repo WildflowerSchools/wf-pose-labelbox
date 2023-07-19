@@ -1,10 +1,10 @@
-# MODULE_NAME
+# pose_labelbox
 
-SHORT_DESCRIPTION
+Tools for creating Labelbox projects involving 2D and 3D pose data
 
 ## Installation
 
-`pip install PYPI_PACKAGE_NAME`
+`pip install wf-pose-labelbox`
 
 ## Development
 
