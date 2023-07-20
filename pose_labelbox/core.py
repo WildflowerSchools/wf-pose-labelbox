@@ -1,8 +1,12 @@
+import pose_labelbox.ffmpeg
 import video_io
 import honeycomb_io
 import pandas as pd
+import tqdm
+import tqdm.notebook
 import datetime
 import itertools
+import pathlib
 import logging
 
 logger = logging.getLogger(__name__)
@@ -65,10 +69,10 @@ def download_videos(
         environment_id=environment_id,
         environment_name=environment_name,
         camera_device_types=None,
-        camera_device_ids=None,
-        camera_part_numbers=None,
-        camera_names=None,
-        camera_serial_numbers=None,
+        camera_device_ids=device_ids,
+        camera_part_numbers=part_numbers,
+        camera_names=names,
+        camera_serial_numbers=serial_numbers,
         client=client,
         uri=uri,
         token_uri=token_uri,
@@ -134,6 +138,102 @@ def download_videos(
     )
     return video_metadata_df
 
+def extract_frames(
+    start,
+    end,
+    environment_id=None,
+    environment_name=None,
+    device_ids=None,
+    part_numbers=None,
+    serial_numbers=None,
+    names=None,
+    video_duration=datetime.timedelta(seconds=10),
+    client=None,
+    uri=None,
+    token_uri=None,
+    audience=None,
+    client_id=None,
+    client_secret=None,
+    frames_per_video=100,
+    frames_per_second=10,
+    local_video_directory="/data/videos",
+    local_frames_directory="/data/frames",
+    video_filename_extension='mp4',
+    frame_filename_extension='png',
+    overwrite=False,
+    progress_bar=False,
+    notebook=False,
+):
+    target_camera_ids = generate_target_camera_ids(
+        start=start,
+        end=end,
+        environment_id=environment_id,
+        environment_name=environment_name,
+        device_ids=device_ids,
+        part_numbers=part_numbers,
+        serial_numbers=serial_numbers,
+        names=names,
+        client=client,
+        uri=uri,
+        token_uri=token_uri,
+        audience=audience,
+        client_id=client_id,
+        client_secret=client_secret,      
+    )
+    target_video_starts = generate_target_video_starts(
+        start=start,
+        end=end,
+        video_duration=video_duration,
+    )
+    environment_id = honeycomb_io.fetch_environment_id(
+        environment_id=environment_id,
+        environment_name=environment_name,
+    )
+    if progress_bar:
+        if notebook:
+            video_iterator = tqdm.notebook.tqdm(list(itertools.product(target_camera_ids, target_video_starts)))
+        else:
+            video_iterator = tqdm.tqdm(list(itertools.product(target_camera_ids, target_video_starts)))
+    else:
+        video_iterator = list(itertools.product(target_camera_ids, target_video_starts))
+    for camera_id, video_start in video_iterator:
+        video_path = generate_video_path(
+            environment_id=environment_id,
+            camera_id=camera_id,
+            video_start=video_start,
+            local_video_directory=local_video_directory,
+            video_filename_extension=video_filename_extension,
+        )
+        frame_directory_path = generate_frame_directory_path(
+            environment_id=environment_id,
+            camera_id=camera_id,
+            video_start=video_start,
+            local_frames_directory=local_frames_directory,
+        )
+        frame_filenames = generate_frame_filenames(
+            environment_id=environment_id,
+            camera_id=camera_id,
+            video_start=video_start,
+            frames_per_video=frames_per_video,
+            frame_filename_extension=frame_filename_extension,
+        )
+        if frame_directory_path.is_dir():
+            existing_filenames = {path.name for path in frame_directory_path.iterdir()}
+            if set(frame_filenames).issubset(existing_filenames) and not overwrite:
+                logger.info(f'Frames for {video_path} already extracted.')
+                continue
+        ffmpeg_frame_identifier = generate_ffmpeg_frame_identifier(
+            environment_id=environment_id,
+            camera_id=camera_id,
+            video_start=video_start,
+        )
+        pose_labelbox.ffmpeg.extract_video_frames(
+            video_path=video_path,
+            frame_directory_path=frame_directory_path,
+            ffmpeg_frame_identifier=ffmpeg_frame_identifier,
+            frames_per_second=frames_per_second,
+        )
+
 
 def generate_target_video_starts(
     start,
@@ -195,6 +295,102 @@ def generate_target_camera_ids(
     )
     logger.info(f'{len(target_camera_ids)} cameras are consistent with the specified search criteria')
     return target_camera_ids
+
+def generate_video_path(
+    environment_id,
+    camera_id,
+    video_start,
+    local_video_directory='/data/videos',
+    video_filename_extension='mp4',
+):
+    video_path = (
+        pathlib.Path(local_video_directory) /
+        environment_id /
+        camera_id /
+        f'{video_start.year}' /
+        f'{video_start.month:02d}' /
+        f'{video_start.day:02d}' /
+        f'{video_start.hour:02d}' /
+        f'{video_start.minute:02d}-{video_start.second:02d}.{video_filename_extension}'
+    )
+    return video_path
+
+def generate_frame_directory_path(
+    environment_id,
+    camera_id,
+    video_start,
+    local_frames_directory='/data/frames'
+):
+    frame_directory_path = (
+        pathlib.Path(local_frames_directory) /
+        environment_id /
+        camera_id /
+        f'{video_start.year}' /
+        f'{video_start.month:02d}' /
+        f'{video_start.day:02d}' /
+        f'{video_start.hour:02d}' /
+        f'{video_start.minute:02d}-{video_start.second:02d}'
+    )
+    return frame_directory_path
+
+def generate_frame_filenames(
+    environment_id,
+    camera_id,
+    video_start,
+    frames_per_video=100,
+    frame_filename_extension='png',
+):
+    frame_filenames = list()
+    for frame_index in range(1, frames_per_video + 1):
+        frame_filename = generate_frame_filename(
+            environment_id=environment_id,
+            camera_id=camera_id,
+            video_start=video_start,
+            frame_index=frame_index,
+            frame_filename_extension='png',
+        )
+        frame_filenames.append(frame_filename)
+    return frame_filenames
+
+def generate_frame_filename(
+    environment_id,
+    camera_id,
+    video_start,
+    frame_index,
+    frame_filename_extension='png',
+):
+    frame_filename = '{}_{}_{:04d}-{:02d}-{:02d}_{:02d}-{:02d}-{:02d}_{:03d}.{}'.format(
+        environment_id,
+        camera_id,
+        video_start.year,
+        video_start.month,
+        video_start.day,
+        video_start.hour,
+        video_start.minute,
+        video_start.second,
+        frame_index,
+        frame_filename_extension,
+    )
+    return frame_filename
+
+def generate_ffmpeg_frame_identifier(
+    environment_id,
+    camera_id,
+    video_start,
+    frame_filename_extension='png',
+):
+    ffmpeg_frame_identifier = '{}_{}_{:04d}-{:02d}-{:02d}_{:02d}-{:02d}-{:02d}_%03d.{}'.format(
+        environment_id,
+        camera_id,
+        video_start.year,
+        video_start.month,
+        video_start.day,
+        video_start.hour,
+        video_start.minute,
+        video_start.second,
+        frame_filename_extension,
+    )
+    return ffmpeg_frame_identifier
 
 def convert_to_datetime_utc(datetime_object):
     return pd.to_datetime(datetime_object, utc=True).to_pydatetime()

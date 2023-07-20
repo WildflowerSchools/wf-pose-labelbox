@@ -26,6 +26,8 @@ toml = "^0.10.2"
 wf-video-io = ">=3.4.2"
 wf-honeycomb-io = ">=2.1.1"
 pandas = ">=2.0"
+ffmpeg-python = ">=0.2.0"
+tqdm = ">=4.65.0"
 
 [tool.poetry.group.dev.dependencies]
 black = "^22.10.0"
