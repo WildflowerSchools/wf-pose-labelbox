@@ -109,7 +109,30 @@ def download_videos(
         overwrite=overwrite,
         video_client=video_client,
     )
-    return video_metadata_with_local_paths
+    video_metadata_df = (
+        pd.DataFrame(video_metadata_with_local_paths)
+        .rename(columns={
+            'video_timestamp': 'video_start',
+            'device_id': 'camera_id',
+        })
+        .reindex(columns=[
+            'data_id',
+            'environment_id',
+            'camera_id',
+            'video_start',
+            'fps',
+            'duration_seconds',
+            'frame_offsets',
+            'video_local_path',            
+        ])
+        .sort_values([
+            'environment_id',
+            'camera_id',
+            'video_start',
+        ])
+        .set_index('data_id')
+    )
+    return video_metadata_df
 
 
 def generate_target_video_starts(
