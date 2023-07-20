@@ -17,7 +17,6 @@ def download_videos(
     serial_numbers=None,
     names=None,
     video_duration=datetime.timedelta(seconds=10),
-    video_duration_string='10S',
     client=None,
     uri=video_io.config.HONEYCOMB_URI,
     token_uri=video_io.config.HONEYCOMB_TOKEN_URI,
@@ -55,7 +54,6 @@ def download_videos(
         start=start,
         end=end,
         video_duration=video_duration,
-        video_duration_string=video_duration_string,
     )
     target_videos = list(itertools.product(target_camera_ids, target_video_starts))
     logger.info(f'Searching video service for {len(target_videos)} target videos')
@@ -118,12 +116,11 @@ def generate_target_video_starts(
     start,
     end,
     video_duration=datetime.timedelta(seconds=10),
-    video_duration_string='10S',
 ):
     start_utc = convert_to_datetime_utc(start)
     end_utc = convert_to_datetime_utc(end)
     first_video_start_utc = pd.Timestamp(start_utc).floor(video_duration)
-    last_video_start_utc = pd.Timestamp(end_utc).ceil(video_duration_string) - video_duration
+    last_video_start_utc = pd.Timestamp(end_utc).ceil(video_duration) - video_duration
     target_video_starts = (
         pd.date_range(
             start=first_video_start_utc,
