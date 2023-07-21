@@ -1,5 +1,7 @@
-
+import pose_labelbox.utils
 import subprocess
+import datetime
+import pathlib
 import logging
 
 logger = logging.getLogger(__name__)
@@ -77,3 +79,25 @@ def detect_poses_2d(
     logger.info(f"Executing: {' '.join(arguments)}")
     subprocess.run(arguments)
 
+def generate_alphapose_output_directory_path(
+    inference_id,
+    environment_id,
+    camera_id,
+    start,
+    end,
+    video_duration=datetime.timedelta(seconds=10),
+    alphapose_output_parent_directory='/data/alphapose_output',
+):
+    output_start, output_end = pose_labelbox.utils.generate_output_period(
+        start=start,
+        end=end,
+        video_duration=video_duration,
+    )
+    output_start_string = output_start.strftime('%Y%m%d_%H%M%S')
+    output_end_string = output_end.strftime('%Y%m%d_%H%M%S')
+    alphapose_output_directory_path = (
+        pathlib.Path(alphapose_output_parent_directory) /
+        inference_id /
+        f'{camera_id}_{output_start_string}_{output_end_string}'
+    )
+    return alphapose_output_directory_path

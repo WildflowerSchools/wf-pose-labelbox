@@ -1,5 +1,6 @@
 import pose_labelbox.ffmpeg
 import pose_labelbox.alphapose
+import pose_labelbox.utils
 import video_io
 import honeycomb_io
 import pandas as pd
@@ -93,7 +94,7 @@ def download_videos(
     for video_metadatum in video_metadata:
         found_videos.append((
             video_metadatum['device_id'],
-            convert_to_datetime_utc(video_metadatum['video_timestamp'])
+            pose_labelbox.utils.convert_to_datetime_utc(video_metadatum['video_timestamp'])
         ))
     logger.info(f'{len(found_videos)} videos found in video service')
     missing_videos = set(target_videos).difference(found_videos)
@@ -332,7 +333,7 @@ def run_pose_detection_2d(
         image_list_path.parent.mkdir(parents=True, exist_ok=True)
         with open(image_list_path, 'w') as fp:
             fp.writelines([str(path) + '\n' for path in image_list])
-        alphapose_output_directory_path = generate_alphapose_output_directory_path(
+        alphapose_output_directory_path = pose_labelbox.alphapose.generate_alphapose_output_directory_path(
             inference_id=inference_id,
             environment_id=environment_id,
             camera_id=camera_id,
@@ -363,10 +364,13 @@ def generate_target_video_starts(
     end,
     video_duration=datetime.timedelta(seconds=10),
 ):
-    start_utc = convert_to_datetime_utc(start)
-    end_utc = convert_to_datetime_utc(end)
-    first_video_start_utc = pd.Timestamp(start_utc).floor(video_duration)
-    last_video_start_utc = pd.Timestamp(end_utc).ceil(video_duration) - video_duration
+    output_start, output_end = pose_labelbox.utils.generate_output_period(
+        start=start,
+        end=end,
+        video_duration=video_duration,
+    )
+    first_video_start_utc = output_start
+    last_video_start_utc = output_end - video_duration
     target_video_starts = (
         pd.date_range(
             start=first_video_start_utc,
@@ -524,7 +528,7 @@ def generate_image_list_path(
     video_duration=datetime.timedelta(seconds=10),
     image_list_parent_directory='/data/image_lists',
 ):
-    output_start, output_end = generate_output_period(
+    output_start, output_end = pose_labelbox.utils.generate_output_period(
         start=start,
         end=end,
         video_duration=video_duration,
@@ -538,39 +542,4 @@ def generate_image_list_path(
     )
     return image_list_path
 
-def generate_alphapose_output_directory_path(
-    inference_id,
-    environment_id,
-    camera_id,
-    start,
-    end,
-    video_duration=datetime.timedelta(seconds=10),
-    alphapose_output_parent_directory='/data/alphapose_output',
-):
-    output_start, output_end = generate_output_period(
-        start=start,
-        end=end,
-        video_duration=video_duration,
-    )
-    output_start_string = output_start.strftime('%Y%m%d_%H%M%S')
-    output_end_string = output_end.strftime('%Y%m%d_%H%M%S')
-    alphapose_output_directory_path = (
-        pathlib.Path(alphapose_output_parent_directory) /
-        inference_id /
-        f'{camera_id}_{output_start_string}_{output_end_string}'
-    )
-    return alphapose_output_directory_path
 
-def generate_output_period(
-    start,
-    end,
-    video_duration=datetime.timedelta(seconds=10),
-):
-    start_utc = convert_to_datetime_utc(start)
-    end_utc = convert_to_datetime_utc(end)
-    output_start = pd.Timestamp(start_utc).floor(video_duration).to_pydatetime()
-    output_end = pd.Timestamp(end_utc).ceil(video_duration).to_pydatetime()
-    return output_start, output_end
-
-def convert_to_datetime_utc(datetime_object):
-    return pd.to_datetime(datetime_object, utc=True).to_pydatetime()
