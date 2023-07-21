@@ -104,10 +104,6 @@ def parse_alphapose_output(
     audience=None,
     client_id=None,
     client_secret=None,
-    # frames_per_video=100,
-    # local_frames_directory="/data/frames",
-    # frame_filename_extension='png',
-    # image_list_parent_directory = '/data/image_lists',
     alphapose_output_parent_directory='/data/alphapose_output',
     alphapose_output_filename='alphapose-results.json',
 ):
@@ -127,46 +123,7 @@ def parse_alphapose_output(
         client_id=client_id,
         client_secret=client_secret,      
     )
-    # target_video_starts = generate_target_video_starts(
-    #     start=start,
-    #     end=end,
-    #     video_duration=video_duration,
-    # )
     for camera_id in target_camera_ids:
-        # logger.info(f'Generating image list for camera {camera_id}')
-        # image_list=list()
-        # for video_start in sorted(target_video_starts):
-        #     frame_directory_path = generate_frame_directory_path(
-        #         environment_id=environment_id,
-        #         camera_id=camera_id,
-        #         video_start=video_start,
-        #         local_frames_directory=local_frames_directory
-        #     )
-        #     frame_filenames = generate_frame_filenames(
-        #         environment_id=environment_id,
-        #         camera_id=camera_id,
-        #         video_start=video_start,
-        #         frames_per_video=frames_per_video,
-        #         frame_filename_extension=frame_filename_extension,
-        #     )
-        #     for frame_filename in frame_filenames:
-        #         frame_path = frame_directory_path / frame_filename
-        #         if not frame_path.is_file():
-        #             raise ValueError(f'Frame image {frame_path} does not exist')
-        #         image_list.append(frame_path)
-        # logger.info(f'Running 2D pose detection on {len(image_list)} images')
-        # image_list_path = generate_image_list_path(
-        #     inference_id=inference_id,
-        #     environment_id=environment_id,
-        #     camera_id=camera_id,
-        #     start=start,
-        #     end=end,
-        #     video_duration=video_duration,
-        #     image_list_parent_directory=image_list_parent_directory,
-        # )
-        # image_list_path.parent.mkdir(parents=True, exist_ok=True)
-        # with open(image_list_path, 'w') as fp:
-        #     fp.writelines([str(path) + '\n' for path in image_list])
         alphapose_output_directory_path = generate_alphapose_output_directory_path(
             inference_id=inference_id,
             camera_id=camera_id,
@@ -175,7 +132,6 @@ def parse_alphapose_output(
             video_duration=video_duration,
             alphapose_output_parent_directory=alphapose_output_parent_directory,
         )
-        # alphapose_output_directory_path.mkdir(parents=True, exist_ok=True)
         alphapose_output_file_path = alphapose_output_directory_path / alphapose_output_filename
         parsed_alphapose_output_filename = generate_parsed_alphapose_output_filename(
             camera_id=camera_id,
