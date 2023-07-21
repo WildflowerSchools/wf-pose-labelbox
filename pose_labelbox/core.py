@@ -246,6 +246,7 @@ def run_pose_detection_2d(
     camera_part_numbers=None,
     camera_serial_numbers=None,
     camera_names=None,
+    inference_id=None,
     video_duration=datetime.timedelta(seconds=10),
     client=None,
     uri=None,
@@ -294,10 +295,8 @@ def run_pose_detection_2d(
         environment_id=environment_id,
         environment_name=environment_name,
     )
-    inference_id = str(uuid.uuid4())
-    image_list_directory = pathlib.Path(image_list_parent_directory) / inference_id
-    image_list_directory.mkdir(parents=True, exist_ok=True)
-    image_lists = dict()
+    if inference_id is None:
+        inference_id = str(uuid.uuid4())
     for camera_id in target_camera_ids:
         logger.info(f'Generating image list for camera {camera_id}')
         image_list=list()
@@ -321,14 +320,31 @@ def run_pose_detection_2d(
                     raise ValueError(f'Frame image {frame_path} does not exist')
                 image_list.append(frame_path)
         logger.info(f'Running 2D pose detection on {len(image_list)} images')
-        image_list_path = pathlib.Path(image_list_directory) / f'{camera_id}_image_list.txt'
-        alphapose_output_directory = pathlib.Path(alphapose_output_parent_directory) / inference_id / camera_id
-        alphapose_output_directory.mkdir(parents=True, exist_ok=True)
+        image_list_path = generate_image_list_path(
+            inference_id=inference_id,
+            environment_id=environment_id,
+            camera_id=camera_id,
+            start=start,
+            end=end,
+            video_duration=video_duration,
+            image_list_parent_directory=image_list_parent_directory,
+        )
+        image_list_path.parent.mkdir(parents=True, exist_ok=True)
         with open(image_list_path, 'w') as fp:
             fp.writelines([str(path) + '\n' for path in image_list])
+        alphapose_output_directory_path = generate_alphapose_output_directory_path(
+            inference_id=inference_id,
+            environment_id=environment_id,
+            camera_id=camera_id,
+            start=start,
+            end=end,
+            video_duration=video_duration,
+            alphapose_output_parent_directory=alphapose_output_parent_directory,
+        )
+        alphapose_output_directory_path.mkdir(parents=True, exist_ok=True)
         pose_labelbox.alphapose.detect_poses_2d(
             image_list_path=image_list_path,
-            output_directory=alphapose_output_directory,
+            output_directory_path=alphapose_output_directory_path,
             docker_image=docker_image,
             config_file=config_file,
             model_file=model_file,
@@ -340,10 +356,7 @@ def run_pose_detection_2d(
             pose_tracking_reid=pose_tracking_reid,
             single_process=single_process,
         )
-        image_lists[camera_id] = image_list
-    return image_lists
-
-
+    return inference_id
 
 def generate_target_video_starts(
     start,
@@ -501,6 +514,63 @@ def generate_ffmpeg_frame_identifier(
         frame_filename_extension,
     )
     return ffmpeg_frame_identifier
+
+def generate_image_list_path(
+    inference_id,
+    environment_id,
+    camera_id,
+    start,
+    end,
+    video_duration=datetime.timedelta(seconds=10),
+    image_list_parent_directory='/data/image_lists',
+):
+    output_start, output_end = generate_output_period(
+        start=start,
+        end=end,
+        video_duration=video_duration,
+    )
+    output_start_string = output_start.strftime('%Y%m%d_%H%M%S')
+    output_end_string = output_end.strftime('%Y%m%d_%H%M%S')
+    image_list_path = (
+        pathlib.Path(image_list_parent_directory) /
+        inference_id /
+        f'{camera_id}_{output_start_string}_{output_end_string}_image_list.txt'
+    )
+    return image_list_path
+
+def generate_alphapose_output_directory_path(
+    inference_id,
+    environment_id,
+    camera_id,
+    start,
+    end,
+    video_duration=datetime.timedelta(seconds=10),
+    alphapose_output_parent_directory='/data/alphapose_output',
+):
+    output_start, output_end = generate_output_period(
+        start=start,
+        end=end,
+        video_duration=video_duration,
+    )
+    output_start_string = output_start.strftime('%Y%m%d_%H%M%S')
+    output_end_string = output_end.strftime('%Y%m%d_%H%M%S')
+    alphapose_output_directory_path = (
+        pathlib.Path(alphapose_output_parent_directory) /
+        inference_id /
+        f'{camera_id}_{output_start_string}_{output_end_string}'
+    )
+    return alphapose_output_directory_path
+
+def generate_output_period(
+    start,
+    end,
+    video_duration=datetime.timedelta(seconds=10),
+):
+    start_utc = convert_to_datetime_utc(start)
+    end_utc = convert_to_datetime_utc(end)
+    output_start = pd.Timestamp(start_utc).floor(video_duration).to_pydatetime()
+    output_end = pd.Timestamp(end_utc).ceil(video_duration).to_pydatetime()
+    return output_start, output_end
 
 def convert_to_datetime_utc(datetime_object):
     return pd.to_datetime(datetime_object, utc=True).to_pydatetime()

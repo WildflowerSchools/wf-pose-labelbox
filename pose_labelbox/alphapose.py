@@ -6,7 +6,7 @@ logger = logging.getLogger(__name__)
 
 def detect_poses_2d(
     image_list_path,
-    output_directory,
+    output_directory_path,
     docker_image='alphapose-12-1',
     config_file='configs/halpe_26/resnet/256x192_res50_lr1e-3_1x.yaml',
     model_file='pretrained_models/halpe26_fast_res50_256x192.pth',
@@ -67,7 +67,7 @@ def detect_poses_2d(
         '--list',
         str(image_list_path),
         '--outdir',
-        str(output_directory),
+        str(output_directory_path),
     ]
     if single_process:
         alphapose_command.append('--sp')
