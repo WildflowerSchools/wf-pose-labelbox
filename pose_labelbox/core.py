@@ -260,6 +260,7 @@ def run_pose_detection_2d(
     frame_filename_extension='png',
     image_list_parent_directory = '/data/image_lists',
     alphapose_output_parent_directory='/data/alphapose_output',
+    alphapose_output_filename='alphapose-results.json',
     docker_image='alphapose-12-1',
     config_file='configs/halpe_26/resnet/256x192_res50_lr1e-3_1x.yaml',
     model_file='pretrained_models/halpe26_fast_res50_256x192.pth',
@@ -340,6 +341,10 @@ def run_pose_detection_2d(
             video_duration=video_duration,
             alphapose_output_parent_directory=alphapose_output_parent_directory,
         )
+        alphapose_output_file_path = alphapose_output_directory_path / alphapose_output_filename
+        if alphapose_output_file_path.is_file():
+            logger.info(f'AlphaPose output file {alphapose_output_file_path} already exists. Skipping.')
+            continue
         alphapose_output_directory_path.mkdir(parents=True, exist_ok=True)
         pose_labelbox.alphapose.detect_poses_2d(
             image_list_path=image_list_path,

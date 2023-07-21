@@ -140,6 +140,9 @@ def parse_alphapose_output(
             video_duration=video_duration,
         )
         parsed_alphapose_output_file_path = alphapose_output_directory_path / parsed_alphapose_output_filename
+        if parsed_alphapose_output_file_path.is_file():
+            logger.info(f'Parsed AlphaPose output file {parsed_alphapose_output_file_path} already exists. Skipping.')
+            continue
         parse_alphapose_output_file(
             input_path=alphapose_output_file_path,
             output_path=parsed_alphapose_output_file_path,
