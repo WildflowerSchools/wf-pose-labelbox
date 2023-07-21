@@ -1,12 +1,15 @@
 import pose_labelbox.ffmpeg
+import pose_labelbox.alphapose
 import video_io
 import honeycomb_io
 import pandas as pd
 import tqdm
 import tqdm.notebook
 import datetime
+import tempfile
 import itertools
 import pathlib
+import uuid
 import logging
 
 logger = logging.getLogger(__name__)
@@ -233,6 +236,113 @@ def extract_frames(
             ffmpeg_frame_identifier=ffmpeg_frame_identifier,
             frames_per_second=frames_per_second,
         )
+
+def run_pose_detection_2d(
+    start,
+    end,
+    environment_id=None,
+    environment_name=None,
+    camera_ids=None,
+    camera_part_numbers=None,
+    camera_serial_numbers=None,
+    camera_names=None,
+    video_duration=datetime.timedelta(seconds=10),
+    client=None,
+    uri=None,
+    token_uri=None,
+    audience=None,
+    client_id=None,
+    client_secret=None,
+    frames_per_video=100,
+    local_frames_directory="/data/frames",
+    frame_filename_extension='png',
+    image_list_parent_directory = '/data/image_lists',
+    alphapose_output_parent_directory='/data/alphapose_output',
+    docker_image='alphapose-12-1',
+    config_file='configs/halpe_26/resnet/256x192_res50_lr1e-3_1x.yaml',
+    model_file='pretrained_models/halpe26_fast_res50_256x192.pth',
+    detector_name='yolox-x',
+    detector_batch_size_per_gpu=30,
+    pose_batch_size_per_gpu=100,
+    gpus='0',
+    format='coco',
+    pose_tracking_reid=True,
+    single_process=True,
+):
+    target_camera_ids = generate_target_camera_ids(
+        start=start,
+        end=end,
+        environment_id=environment_id,
+        environment_name=environment_name,
+        camera_ids=camera_ids,
+        camera_part_numbers=camera_part_numbers,
+        camera_serial_numbers=camera_serial_numbers,
+        camera_names=camera_names,
+        client=client,
+        uri=uri,
+        token_uri=token_uri,
+        audience=audience,
+        client_id=client_id,
+        client_secret=client_secret,      
+    )
+    target_video_starts = generate_target_video_starts(
+        start=start,
+        end=end,
+        video_duration=video_duration,
+    )
+    environment_id = honeycomb_io.fetch_environment_id(
+        environment_id=environment_id,
+        environment_name=environment_name,
+    )
+    inference_id = str(uuid.uuid4())
+    image_list_directory = pathlib.Path(image_list_parent_directory) / inference_id
+    image_list_directory.mkdir(parents=True, exist_ok=True)
+    image_lists = dict()
+    for camera_id in target_camera_ids:
+        logger.info(f'Generating image list for camera {camera_id}')
+        image_list=list()
+        for video_start in sorted(target_video_starts):
+            frame_directory_path = generate_frame_directory_path(
+                environment_id=environment_id,
+                camera_id=camera_id,
+                video_start=video_start,
+                local_frames_directory=local_frames_directory
+            )
+            frame_filenames = generate_frame_filenames(
+                environment_id=environment_id,
+                camera_id=camera_id,
+                video_start=video_start,
+                frames_per_video=frames_per_video,
+                frame_filename_extension=frame_filename_extension,
+            )
+            for frame_filename in frame_filenames:
+                frame_path = frame_directory_path / frame_filename
+                if not frame_path.is_file():
+                    raise ValueError(f'Frame image {frame_path} does not exist')
+                image_list.append(frame_path)
+        logger.info(f'Running 2D pose detection on {len(image_list)} images')
+        image_list_path = pathlib.Path(image_list_directory) / f'{camera_id}_image_list.txt'
+        alphapose_output_directory = pathlib.Path(alphapose_output_parent_directory) / inference_id / camera_id
+        alphapose_output_directory.mkdir(parents=True, exist_ok=True)
+        with open(image_list_path, 'w') as fp:
+            fp.writelines([str(path) + '\n' for path in image_list])
+        pose_labelbox.alphapose.detect_poses_2d(
+            image_list_path=image_list_path,
+            output_directory=alphapose_output_directory,
+            docker_image=docker_image,
+            config_file=config_file,
+            model_file=model_file,
+            detector_name=detector_name,
+            detector_batch_size_per_gpu=detector_batch_size_per_gpu,
+            pose_batch_size_per_gpu=pose_batch_size_per_gpu,
+            gpus=gpus,
+            format=format,
+            pose_tracking_reid=pose_tracking_reid,
+            single_process=single_process,
+        )
+        image_lists[camera_id] = image_list
+    return image_lists
+
 
 
 def generate_target_video_starts(

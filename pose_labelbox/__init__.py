@@ -4,6 +4,8 @@ from pathlib import Path
 import toml
 
 from .core import *
+from .ffmpeg import *
+from .alphapose import *
 
 PROJECT_NAME = 'wf-pose-labelbox' # Keep this synced with project name in pyproject.toml
 
