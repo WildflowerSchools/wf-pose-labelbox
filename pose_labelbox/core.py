@@ -445,6 +445,36 @@ def generate_video_path(
     )
     return video_path
 
+def generate_frame_path(
+    environment_id,
+    camera_id,
+    timestamp,
+    video_duration=datetime.timedelta(seconds=10),
+    frame_period=datetime.timedelta(milliseconds=100),
+    local_frames_directory='/data/frames',
+    frame_filename_extension='png',
+):
+    video_start = pd.Timestamp(timestamp).floor(video_duration)
+    frame_index = round(
+        (pd.Timestamp(timestamp) - video_start) /
+        pd.Timedelta(frame_period)
+    ) + 1
+    frame_directory_path = generate_frame_directory_path(
+        environment_id=environment_id,
+        camera_id=camera_id,
+        video_start=video_start,
+        local_frames_directory=local_frames_directory
+    )
+    frame_filename = generate_frame_filename(
+        environment_id=environment_id,
+        camera_id=camera_id,
+        video_start=video_start,
+        frame_index=frame_index,
+        frame_filename_extension=frame_filename_extension,
+    )
+    frame_path = frame_directory_path / frame_filename
+    return frame_path
+
 def generate_frame_directory_path(
     environment_id,
     camera_id,
