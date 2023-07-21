@@ -323,7 +323,6 @@ def run_pose_detection_2d(
         logger.info(f'Running 2D pose detection on {len(image_list)} images')
         image_list_path = generate_image_list_path(
             inference_id=inference_id,
-            environment_id=environment_id,
             camera_id=camera_id,
             start=start,
             end=end,
@@ -335,7 +334,6 @@ def run_pose_detection_2d(
             fp.writelines([str(path) + '\n' for path in image_list])
         alphapose_output_directory_path = pose_labelbox.alphapose.generate_alphapose_output_directory_path(
             inference_id=inference_id,
-            environment_id=environment_id,
             camera_id=camera_id,
             start=start,
             end=end,
@@ -521,7 +519,6 @@ def generate_ffmpeg_frame_identifier(
 
 def generate_image_list_path(
     inference_id,
-    environment_id,
     camera_id,
     start,
     end,
