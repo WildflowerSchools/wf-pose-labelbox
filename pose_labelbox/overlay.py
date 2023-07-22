@@ -1,10 +1,138 @@
 import pose_labelbox.core
+import pose_labelbox.alphapose
 import cv_utils
+import honeycomb_io
+import pandas as pd
+import tqdm
+import tqdm.notebook
 import datetime
 import pathlib
 import logging
 
 logger = logging.getLogger(__name__)
+
+def generate_bounding_box_overlays(
+    inference_id,
+    start,
+    end,
+    environment_id=None,
+    environment_name=None,
+    camera_ids=None,
+    camera_part_numbers=None,
+    camera_serial_numbers=None,
+    camera_names=None,
+    video_duration=datetime.timedelta(seconds=10),
+    frame_period=datetime.timedelta(milliseconds=100),
+    client=None,
+    uri=None,
+    token_uri=None,
+    audience=None,
+    client_id=None,
+    client_secret=None,
+    alphapose_output_parent_directory='/data/alphapose_output',
+    show_timestamp=True,
+    show_pose_track_label=True,
+    local_frames_directory='/data/frames',
+    frame_filename_extension='png',
+    bounding_box_line_width=1.5,
+    bounding_box_color='#00ff00',
+    bounding_box_fill=False,
+    bounding_box_alpha=1.0,
+    timestamp_padding=5,
+    timestamp_font_scale=1.5,
+    timestamp_text_line_width=1,
+    timestamp_text_color='#ffffff',
+    timestamp_box_color='#000000',
+    timestamp_box_fill=True,
+    timestamp_box_alpha=0.3,
+    pose_track_label_font_scale=2.0,
+    pose_track_label_text_line_width=1.5,
+    pose_track_label_text_color='#ffffff',
+    pose_track_label_text_alpha=1.0,
+    pose_track_label_box_line_width=1.5,
+    pose_track_label_box_color='#00ff00',
+    pose_track_label_box_fill=True,
+    pose_track_label_box_alpha=0.5,
+    progress_bar=False,
+    notebook=False,
+):
+    target_camera_ids = pose_labelbox.core.generate_target_camera_ids(
+        start=start,
+        end=end,
+        environment_id=environment_id,
+        environment_name=environment_name,
+        camera_ids=camera_ids,
+        camera_part_numbers=camera_part_numbers,
+        camera_serial_numbers=camera_serial_numbers,
+        camera_names=camera_names,
+        client=client,
+        uri=uri,
+        token_uri=token_uri,
+        audience=audience,
+        client_id=client_id,
+        client_secret=client_secret,      
+    )
+    if environment_id is None:
+        environment_id = honeycomb_io.fetch_environment_id(environment_name=environment_name)
+    for camera_id in target_camera_ids:
+        alphapose_output_directory_path = pose_labelbox.alphapose.generate_alphapose_output_directory_path(
+            inference_id=inference_id,
+            camera_id=camera_id,
+            start=start,
+            end=end,
+            video_duration=video_duration,
+            alphapose_output_parent_directory=alphapose_output_parent_directory,
+        )
+        parsed_alphapose_output_filename = pose_labelbox.alphapose.generate_parsed_alphapose_output_filename(
+            camera_id=camera_id,
+            start=start,
+            end=end,
+            video_duration=video_duration,
+        )
+        parsed_alphapose_output_file_path = alphapose_output_directory_path / parsed_alphapose_output_filename
+        poses_2d = pd.read_pickle(parsed_alphapose_output_file_path)
+        if progress_bar:
+            if notebook:
+                pose_iterator = tqdm.notebook.tqdm(poses_2d.iterrows(), total=len(poses_2d))
+            else:
+                pose_iterator = tqdm(poses_2d.iterrows(), total=len(poses_2d))
+        else:
+            pose_iterator = poses_2d.iterrows()
+        for pose_2d_id, pose_2d in pose_iterator:
+            generate_bounding_box_overlay(
+                inference_id=inference_id,
+                environment_id=environment_id,
+                camera_id=camera_id,
+                timestamp=pose_2d['timestamp'],
+                bounding_box_corners=pose_2d['bounding_box_corners'],
+                pose_track_label=pose_2d['pose_track_label'],
+                show_timestamp=show_timestamp,
+                show_pose_track_label=show_pose_track_label,
+                video_duration=video_duration,
+                frame_period=frame_period,
+                local_frames_directory=local_frames_directory,
+                frame_filename_extension=frame_filename_extension,
+                bounding_box_line_width=bounding_box_line_width,
+                bounding_box_color=bounding_box_color,
+                bounding_box_fill=bounding_box_fill,
+                bounding_box_alpha=bounding_box_alpha,
+                timestamp_padding=timestamp_padding,
+                timestamp_font_scale=timestamp_font_scale,
+                timestamp_text_line_width=timestamp_text_line_width,
+                timestamp_text_color=timestamp_text_color,
+                timestamp_box_color=timestamp_box_color,
+                timestamp_box_fill=timestamp_box_fill,
+                timestamp_box_alpha=timestamp_box_alpha,
+                pose_track_label_font_scale=pose_track_label_font_scale,
+                pose_track_label_text_line_width=pose_track_label_text_line_width,
+                pose_track_label_text_color=pose_track_label_text_color,
+                pose_track_label_text_alpha=pose_track_label_text_alpha,
+                pose_track_label_box_line_width=pose_track_label_box_line_width,
+                pose_track_label_box_color=pose_track_label_box_color,
+                pose_track_label_box_fill=pose_track_label_box_fill,
+                pose_track_label_box_alpha=pose_track_label_box_alpha,
+            )            
+
 
 
 def generate_bounding_box_overlay(
