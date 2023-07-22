@@ -198,14 +198,18 @@ def parse_pose_2d_raw(
     keypoints = np.where(keypoints == 0.0, np.nan, keypoints)
     keypoint_quality = np.where(keypoint_quality == 0.0, np.nan, keypoint_quality)
     pose_quality = pose_2d_raw['score']
-    bounding_box_flat = np.asarray(pose_2d_raw['box'])
-    bounding_box = bounding_box_flat.reshape((2,2))
+    bounding_box_xywh = np.asarray(pose_2d_raw['box'])
+    bounding_box_corners = np.array([
+        [bounding_box_xywh[0], bounding_box_xywh[1]],
+        [bounding_box_xywh[0] + bounding_box_xywh[2], bounding_box_xywh[1] + bounding_box_xywh[3]]
+    ])
     pose_track_label = pose_2d_raw['idx']
     pose_2d = OrderedDict([
         ('pose_2d_id', pose_2d_id),
         ('camera_id', camera_id),
         ('timestamp', timestamp),
-        ('bounding_box', bounding_box),
+        ('bounding_box_xywh', bounding_box_xywh),
+        ('bounding_box_corners', bounding_box_corners),
         ('keypoint_coordinates_2d', keypoint_coordinates),
         ('keypoint_quality_2d', keypoint_quality),
         ('pose_quality_2d', pose_quality),
