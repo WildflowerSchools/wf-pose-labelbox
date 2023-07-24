@@ -77,6 +77,33 @@ def create_metadata_field(
             kind=kind,
         )
 
+def generate_person_ontology(
+    inference_id,
+    person_descriptions,
+    unusuable_bounding_box_label='Unusable bounding box',
+    client=None,
+):
+    if client is None:
+        client = generate_labelbox_client()
+    name = f'Person ({inference_id})'
+    existing_ontologies = client.get_ontologies(name_contains=name)
+    existing_ontology = existing_ontologies.get_one()
+    if existing_ontology is not None:
+        logger.info('Person ontology for inference ID {inference_id} already exists. Skipping')
+        return existing_ontology.uid
+    person_feature_schema_id = generate_person_feature_schema(
+        inference_id=inference_id,
+        person_descriptions=person_descriptions,
+        unusuable_bounding_box_label=unusuable_bounding_box_label,
+        client=client,
+    )
+    ontology = client.create_ontology_from_feature_schemas(
+        name=name,
+        feature_schema_ids=[person_feature_schema_id],
+        media_type=lb.MediaType.Video
+    )
+    return ontology.uid
+
 def generate_person_feature_schema(
     inference_id,
     person_descriptions,
