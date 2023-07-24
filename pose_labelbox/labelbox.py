@@ -88,9 +88,10 @@ def generate_person_feature_schema(
     name = f'person_{inference_id}'
     instructions = f'Person ({inference_id})'
     existing_feature_schemas = client.get_feature_schemas(name_contains=instructions)
-    if existing_feature_schemas.get_one() is not None:
+    existing_feature_schema = existing_feature_schemas.get_one()
+    if existing_feature_schema is not None:
         logger.info('Person feature schema for inference ID {inference_id} already exists. Skipping')
-        return None
+        return existing_feature_schema.uid
     options = list()
     for person_description in person_descriptions:
         options.append(lb.Option(
