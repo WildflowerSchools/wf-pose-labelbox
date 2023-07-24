@@ -1,6 +1,10 @@
+import pose_labelbox.utils
+import honeycomb_io
 import labelbox as lb
 import slugify
 import pathlib
+import datetime
+import uuid
 import os
 import logging
 
@@ -139,7 +143,69 @@ def create_person_feature_schema(
     person_radio = client.create_feature_schema(person_radio_classification.asdict())
     return person_radio.uid
 
-
+def create_dataset(
+    start,
+    end,
+    inference_id,
+    environment_name=None,
+    environment_id=None,
+    video_duration=datetime.timedelta(seconds=10),
+    bounding_box_overlay_video_parent_directory='/data/bounding_box_overlay_videos',
+    overlay_video_extension='mp4',
+    client=None,
+):
+    if client is None:
+        client = generate_labelbox_client()
+    environment_id = honeycomb_io.fetch_environment_id(
+        environment_id=environment_id,
+        environment_name=environment_name,
+    )
+    labeling_period_start, labeling_period_end = pose_labelbox.utils.generate_output_period(
+        start=start,
+        end=end,
+        video_duration=video_duration,
+    )
+    inference_directory_path = (
+        pathlib.Path(bounding_box_overlay_video_parent_directory) /
+        inference_id
+    )
+    name = f'Pose tracks 2D ({inference_id})'
+    existing_datasets = client.get_datasets(where=(lb.Dataset.name == name))
+    existing_dataset = existing_datasets.get_one()
+    if existing_dataset is not None:
+        logger.info('Dataset for inference ID {inference_id} already exists. Skipping')
+        return existing_dataset.uid
+    dataset = client.create_dataset(
+        iam_integration=None,
+        name=name,
+        description=name
+    )
+    datarows=list()
+    for camera_directory_path in inference_directory_path.iterdir():
+        camera_id = camera_directory_path.name
+        logger.info(f'Generating data rows for camera {camera_id}')
+        for video_local_path in camera_directory_path.iterdir():
+            pose_track_label = video_local_path.stem
+            logger.info(f'Generating data row for camera {camera_id} and pose track label {pose_track_label}')
+            data_id = str(uuid.uuid4())
+            video_url = client.upload_file(video_local_path)
+            datarows.append({
+                lb.DataRow.row_data: video_url,
+                lb.DataRow.external_id: data_id,
+                lb.DataRow.global_key: data_id,
+                lb.DataRow.metadata_fields: [
+                    lb.DataRowMetadataField(name='environment_id', value=environment_id),
+                    lb.DataRowMetadataField(name='inference_id',  value=inference_id),
+                    lb.DataRowMetadataField(name='labeling_period_start',  value=labeling_period_start),
+                    lb.DataRowMetadataField(name='labeling_period_end',  value=labeling_period_end),
+                    lb.DataRowMetadataField(name='camera_id',  value=camera_id),
+                    lb.DataRowMetadataField(name='pose_track_2d_label',  value=pose_track_label),
+                ]
+            })
+    create_task = dataset.create_data_rows(datarows)
+    create_task.wait_till_done()
+    status = create_task.status
+    return dataset.uid
 
 def generate_labelbox_client(api_key=None):
     if api_key is None:
