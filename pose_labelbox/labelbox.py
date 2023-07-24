@@ -77,7 +77,7 @@ def create_metadata_field(
             kind=kind,
         )
 
-def generate_person_ontology(
+def create_person_ontology(
     inference_id,
     person_descriptions,
     unusuable_bounding_box_label='Unusable bounding box',
@@ -91,7 +91,7 @@ def generate_person_ontology(
     if existing_ontology is not None:
         logger.info('Person ontology for inference ID {inference_id} already exists. Skipping')
         return existing_ontology.uid
-    person_feature_schema_id = generate_person_feature_schema(
+    person_feature_schema_id = create_person_feature_schema(
         inference_id=inference_id,
         person_descriptions=person_descriptions,
         unusuable_bounding_box_label=unusuable_bounding_box_label,
@@ -104,7 +104,7 @@ def generate_person_ontology(
     )
     return ontology.uid
 
-def generate_person_feature_schema(
+def create_person_feature_schema(
     inference_id,
     person_descriptions,
     unusuable_bounding_box_label='Unusable bounding box',
@@ -138,6 +138,7 @@ def generate_person_feature_schema(
     )
     person_radio = client.create_feature_schema(person_radio_classification.asdict())
     return person_radio.uid
+
 
 
 def generate_labelbox_client(api_key=None):
