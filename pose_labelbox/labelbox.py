@@ -1,4 +1,5 @@
 import labelbox as lb
+import slugify
 import pathlib
 import os
 import logging
@@ -51,7 +52,7 @@ def create_metadata_fields(
         client=client,
     )
     create_metadata_field(
-        name='pose_track_label',
+        name='pose_track_2d_label',
         metadata_ontology=metadata_ontology,
         client=client,
     )
@@ -75,6 +76,41 @@ def create_metadata_field(
             name=name,
             kind=kind,
         )
+
+def generate_person_feature_schema(
+    inference_id,
+    person_descriptions,
+    unusuable_bounding_box_label='Unusable bounding box',
+    client=None,
+):
+    if client is None:
+        client = generate_labelbox_client()
+    name = f'person_{inference_id}'
+    instructions = f'Person ({inference_id})'
+    existing_feature_schemas = client.get_feature_schemas(name_contains=instructions)
+    if existing_feature_schemas.get_one() is not None:
+        logger.info('Person feature schema for inference ID {inference_id} already exists. Skipping')
+        return None
+    options = list()
+    for person_description in person_descriptions:
+        options.append(lb.Option(
+            value=slugify.slugify(person_description),
+            label=person_description,
+        ))
+    options.append(lb.Option(
+        value='unusable',
+        label=unusuable_bounding_box_label,
+    ))
+    person_radio_classification = lb.Classification(
+        class_type=lb.Classification.Type.RADIO,
+        name=name,
+        instructions=instructions,
+        options=options,
+        scope=lb.Classification.Scope.INDEX
+    )
+    person_radio = client.create_feature_schema(person_radio_classification.asdict())
+    return person_radio.uid
+
 
 def generate_labelbox_client(api_key=None):
     if api_key is None:

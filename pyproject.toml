@@ -29,6 +29,7 @@ wf-cv-utils = ">=3.6.0"
 pandas = ">=2.0"
 ffmpeg-python = ">=0.2.0"
 labelbox = ">=3.49.1"
+python-slugify = ">=8.0.1"
 tqdm = ">=4.65.0"
 
 [tool.poetry.group.dev.dependencies]
