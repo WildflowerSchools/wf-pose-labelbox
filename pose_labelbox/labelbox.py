@@ -173,7 +173,7 @@ def create_dataset(
     existing_datasets = client.get_datasets(where=(lb.Dataset.name == name))
     existing_dataset = existing_datasets.get_one()
     if existing_dataset is not None:
-        logger.info('Dataset for inference ID {inference_id} already exists. Skipping')
+        logger.info(f'Dataset for inference ID {inference_id} already exists. Skipping')
         return existing_dataset.uid
     dataset = client.create_dataset(
         iam_integration=None,
