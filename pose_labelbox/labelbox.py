@@ -181,10 +181,10 @@ def create_dataset(
         description=name
     )
     datarows=list()
-    for camera_directory_path in inference_directory_path.iterdir():
+    for camera_directory_path in sorted(inference_directory_path.iterdir()):
         camera_id = camera_directory_path.name
         logger.info(f'Generating data rows for camera {camera_id}')
-        for video_local_path in camera_directory_path.iterdir():
+        for video_local_path in sorted(camera_directory_path.iterdir()):
             pose_track_label = video_local_path.stem
             logger.info(f'Generating data row for camera {camera_id} and pose track label {pose_track_label}')
             data_id = str(uuid.uuid4())
