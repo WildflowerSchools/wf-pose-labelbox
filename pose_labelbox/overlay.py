@@ -99,7 +99,7 @@ def generate_bounding_box_overlays(
         else:
             pose_iterator = poses_2d.iterrows()
         for pose_2d_id, pose_2d in pose_iterator:
-            generate_bounding_box_overlay(
+            image_output_path = generate_bounding_box_overlay(
                 inference_id=inference_id,
                 environment_id=environment_id,
                 camera_id=camera_id,
@@ -287,6 +287,26 @@ def overlay_bounding_box(
             box_alpha=pose_track_label_box_alpha,
         )
     return image
+
+def generate_bounding_box_overlay_image_lists(
+    inference_id,
+    bounding_box_overlay_parent_directory='/data/bounding_box_overlays',
+    overlay_image_extension='png',
+    frame_period=datetime.timedelta(milliseconds=100),
+):
+    inference_directory_path = (
+        pathlib.Path(bounding_box_overlay_parent_directory) /
+        inference_id
+    )
+    for camera_directory_path in inference_directory_path.iterdir():
+        for pose_track_directory_path in camera_directory_path.iterdir():
+            image_list_path = pose_track_directory_path / 'image_list.txt'
+            with open(image_list_path, 'w') as fp:
+                for image_filename in sorted(pose_track_directory_path.glob(f'*.{overlay_image_extension}')):
+                    image_path = pose_track_directory_path / image_filename
+                    fp.write(f'file \'{str(image_path)}\'\n')
+                    fp.write(f'duration {frame_period.total_seconds()}\n')
+
 
 def generate_bounding_box_overlay_path(
     inference_id,
