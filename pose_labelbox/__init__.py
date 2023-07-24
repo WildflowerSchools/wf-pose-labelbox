@@ -7,6 +7,7 @@ from .core import *
 from .ffmpeg import *
 from .alphapose import *
 from .overlay import *
+from .labelbox import *
 from .utils import *
 
 PROJECT_NAME = 'wf-pose-labelbox' # Keep this synced with project name in pyproject.toml
