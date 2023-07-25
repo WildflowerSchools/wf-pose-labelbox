@@ -81,10 +81,73 @@ def create_metadata_field(
             kind=kind,
         )
 
+def create_project(
+    inference_id,
+    ontology_id=None,
+    person_descriptions=None,
+    unusuable_bounding_box_label='Unusable bounding box',
+    person_feature_schema_id=None,
+    dataset_id=None,
+    start=None,
+    end=None,
+    environment_name=None,
+    environment_id=None,
+    video_duration=datetime.timedelta(seconds=10),
+    bounding_box_overlay_video_parent_directory='/data/bounding_box_overlay_videos',
+    overlay_video_extension='mp4',
+    client=None
+):
+    if client is None:
+        client = generate_labelbox_client()
+    name=f'Identify people ({inference_id})'
+    existing_projects = client.get_projects(where=(lb.Project.name == name))
+    existing_project = existing_projects.get_one()
+    if existing_project is not None:
+        logger.info(f'Person identification project for inference ID {inference_id} already exists. Skipping')
+        return existing_project.uid
+    if ontology_id is None:
+        logger.info(f'Person ontology for inference ID {inference_id} not specified. Creating.')
+        ontology_id = create_person_ontology(
+            inference_id=inference_id,
+            person_descriptions=person_descriptions,
+            unusuable_bounding_box_label=unusuable_bounding_box_label,
+            person_feature_schema_id=person_feature_schema_id,
+            client=client,
+        )
+    ontology = client.get_ontology(ontology_id)
+    if dataset_id is None:
+        logger.info(f'Dataset for inference ID {inference_id} not specified. Creating.')
+        dataset_id = create_dataset(
+            start=start,
+            end=end,
+            inference_id=inference_id,
+            environment_name=environment_name,
+            environment_id=environment_id,
+            video_duration=video_duration,
+            bounding_box_overlay_video_parent_directory=bounding_box_overlay_video_parent_directory,
+            overlay_video_extension=overlay_video_extension,
+            client=client,
+        )
+    dataset = client.get_dataset(dataset_id)
+    logger.info('Creating project')
+    project = client.create_project(
+        name=name,
+        media_type=lb.MediaType.Video
+    )
+    batch_name=f'First batch ({inference_id})'
+    batch = project.create_batch(
+        name=batch_name,
+        data_rows=dataset.export_data_rows(),
+        priority=1
+    )
+    project.setup_editor(ontology)
+    return project.uid
+
 def create_person_ontology(
     inference_id,
     person_descriptions,
     unusuable_bounding_box_label='Unusable bounding box',
+    person_feature_schema_id=None,
     client=None,
 ):
     if client is None:
@@ -95,12 +158,17 @@ def create_person_ontology(
     if existing_ontology is not None:
         logger.info('Person ontology for inference ID {inference_id} already exists. Skipping')
         return existing_ontology.uid
-    person_feature_schema_id = create_person_feature_schema(
-        inference_id=inference_id,
-        person_descriptions=person_descriptions,
-        unusuable_bounding_box_label=unusuable_bounding_box_label,
-        client=client,
-    )
+    if person_descriptions is None:
+        raise ValueError('Person descriptions not provided.')
+    if person_feature_schema_id is None:
+        logger.info('Person feature schema ID not provided. Creating.')
+        person_feature_schema_id = create_person_feature_schema(
+            inference_id=inference_id,
+            person_descriptions=person_descriptions,
+            unusuable_bounding_box_label=unusuable_bounding_box_label,
+            client=client,
+        )
+    logger.info('Creating ontology')
     ontology = client.create_ontology_from_feature_schemas(
         name=name,
         feature_schema_ids=[person_feature_schema_id],
@@ -123,6 +191,8 @@ def create_person_feature_schema(
     if existing_feature_schema is not None:
         logger.info('Person feature schema for inference ID {inference_id} already exists. Skipping')
         return existing_feature_schema.uid
+    if person_descriptions is None:
+        raise ValueError('Person descriptions not provided.')
     options = list()
     for person_description in person_descriptions:
         options.append(lb.Option(
@@ -156,10 +226,18 @@ def create_dataset(
 ):
     if client is None:
         client = generate_labelbox_client()
+    name = f'Pose tracks 2D ({inference_id})'
+    existing_datasets = client.get_datasets(where=(lb.Dataset.name == name))
+    existing_dataset = existing_datasets.get_one()
+    if existing_dataset is not None:
+        logger.info(f'Dataset for inference ID {inference_id} already exists. Skipping')
+        return existing_dataset.uid
     environment_id = honeycomb_io.fetch_environment_id(
         environment_id=environment_id,
         environment_name=environment_name,
     )
+    if start is None or end is None:
+        raise ValueError('Start and end values not provided')
     labeling_period_start, labeling_period_end = pose_labelbox.utils.generate_output_period(
         start=start,
         end=end,
@@ -169,12 +247,7 @@ def create_dataset(
         pathlib.Path(bounding_box_overlay_video_parent_directory) /
         inference_id
     )
-    name = f'Pose tracks 2D ({inference_id})'
-    existing_datasets = client.get_datasets(where=(lb.Dataset.name == name))
-    existing_dataset = existing_datasets.get_one()
-    if existing_dataset is not None:
-        logger.info(f'Dataset for inference ID {inference_id} already exists. Skipping')
-        return existing_dataset.uid
+    logger.info('Creating dataset')
     dataset = client.create_dataset(
         iam_integration=None,
         name=name,
