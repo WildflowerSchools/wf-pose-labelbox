@@ -75,6 +75,7 @@ def generate_bounding_box_overlays(
     if environment_id is None:
         environment_id = honeycomb_io.fetch_environment_id(environment_name=environment_name)
     for camera_id in target_camera_ids:
+        logger.info(f'Generating bounding box overlay images for camera {camera_id}')
         alphapose_output_directory_path = pose_labelbox.alphapose.generate_alphapose_output_directory_path(
             inference_id=inference_id,
             camera_id=camera_id,
@@ -90,48 +91,77 @@ def generate_bounding_box_overlays(
             video_duration=video_duration,
         )
         parsed_alphapose_output_file_path = alphapose_output_directory_path / parsed_alphapose_output_filename
-        poses_2d = pd.read_pickle(parsed_alphapose_output_file_path)
+        poses_2d = (
+            pd.read_pickle(parsed_alphapose_output_file_path)
+            .sort_values([
+                'pose_track_label',
+                'timestamp'
+            ])
+        )
+        base_pose_track_iterator = poses_2d.groupby(
+            'pose_track_label',
+            group_keys=False
+        )
+        num_pose_tracks = len(poses_2d['pose_track_label'].unique())
         if progress_bar:
             if notebook:
-                pose_iterator = tqdm.notebook.tqdm(poses_2d.iterrows(), total=len(poses_2d))
+                pose_track_iterator = tqdm.notebook.tqdm(base_pose_track_iterator, total=num_pose_tracks)
             else:
-                pose_iterator = tqdm(poses_2d.iterrows(), total=len(poses_2d))
+                pose_track_iterator = tqdm(base_pose_track_iterator, total=num_pose_tracks)
         else:
-            pose_iterator = poses_2d.iterrows()
-        for pose_2d_id, pose_2d in pose_iterator:
-            image_output_path = generate_bounding_box_overlay(
-                inference_id=inference_id,
-                environment_id=environment_id,
-                camera_id=camera_id,
-                timestamp=pose_2d['timestamp'],
-                bounding_box_corners=pose_2d['bounding_box_corners'],
-                pose_track_label=pose_2d['pose_track_label'],
-                show_timestamp=show_timestamp,
-                show_pose_track_label=show_pose_track_label,
-                video_duration=video_duration,
-                frame_period=frame_period,
-                local_frames_directory=local_frames_directory,
-                frame_filename_extension=frame_filename_extension,
-                bounding_box_line_width=bounding_box_line_width,
-                bounding_box_color=bounding_box_color,
-                bounding_box_fill=bounding_box_fill,
-                bounding_box_alpha=bounding_box_alpha,
-                timestamp_padding=timestamp_padding,
-                timestamp_font_scale=timestamp_font_scale,
-                timestamp_text_line_width=timestamp_text_line_width,
-                timestamp_text_color=timestamp_text_color,
-                timestamp_box_color=timestamp_box_color,
-                timestamp_box_fill=timestamp_box_fill,
-                timestamp_box_alpha=timestamp_box_alpha,
-                pose_track_label_font_scale=pose_track_label_font_scale,
-                pose_track_label_text_line_width=pose_track_label_text_line_width,
-                pose_track_label_text_color=pose_track_label_text_color,
-                pose_track_label_text_alpha=pose_track_label_text_alpha,
-                pose_track_label_box_line_width=pose_track_label_box_line_width,
-                pose_track_label_box_color=pose_track_label_box_color,
-                pose_track_label_box_fill=pose_track_label_box_fill,
-                pose_track_label_box_alpha=pose_track_label_box_alpha,
-            )            
+            pose_track_iterator = base_pose_track_iterator
+        for pose_track_label, pose_track in pose_track_iterator:
+            pose_track_start = pose_track['timestamp'].min()
+            pose_track_end = pose_track['timestamp'].max()
+            timestamps = pd.date_range(
+                start=pose_track_start,
+                end=pose_track_end,
+                freq=frame_period
+            )
+            for timestamp in timestamps:
+                num_timestamp_occurrences = (pose_track['timestamp'] == timestamp).sum()
+                if num_timestamp_occurrences > 1:
+                    raise ValueError(f'Pose track {pose_trackl_label} contains duplicate timestamps')
+                if num_timestamp_occurrences == 1:
+                    show_bounding_box = True
+                    bounding_box_corners=pose_track.loc[pose_track['timestamp'] == timestamp].iloc[0]['bounding_box_corners']
+                else:
+                    show_bounding_box = False
+                    bounding_box_corners = None
+                image_output_path = generate_bounding_box_overlay(
+                    inference_id=inference_id,
+                    environment_id=environment_id,
+                    camera_id=camera_id,
+                    timestamp=timestamp,
+                    show_bounding_box=show_bounding_box,
+                    bounding_box_corners=bounding_box_corners,
+                    pose_track_label=pose_track_label,
+                    show_timestamp=show_timestamp,
+                    show_pose_track_label=show_pose_track_label,
+                    video_duration=video_duration,
+                    frame_period=frame_period,
+                    local_frames_directory=local_frames_directory,
+                    frame_filename_extension=frame_filename_extension,
+                    bounding_box_line_width=bounding_box_line_width,
+                    bounding_box_color=bounding_box_color,
+                    bounding_box_fill=bounding_box_fill,
+                    bounding_box_alpha=bounding_box_alpha,
+                    timestamp_padding=timestamp_padding,
+                    timestamp_font_scale=timestamp_font_scale,
+                    timestamp_text_line_width=timestamp_text_line_width,
+                    timestamp_text_color=timestamp_text_color,
+                    timestamp_box_color=timestamp_box_color,
+                    timestamp_box_fill=timestamp_box_fill,
+                    timestamp_box_alpha=timestamp_box_alpha,
+                    pose_track_label_font_scale=pose_track_label_font_scale,
+                    pose_track_label_text_line_width=pose_track_label_text_line_width,
+                    pose_track_label_text_color=pose_track_label_text_color,
+                    pose_track_label_text_alpha=pose_track_label_text_alpha,
+                    pose_track_label_box_line_width=pose_track_label_box_line_width,
+                    pose_track_label_box_color=pose_track_label_box_color,
+                    pose_track_label_box_fill=pose_track_label_box_fill,
+                    pose_track_label_box_alpha=pose_track_label_box_alpha,
+                )            
 
 
 
@@ -140,10 +170,11 @@ def generate_bounding_box_overlay(
     environment_id,
     camera_id,
     timestamp,
-    bounding_box_corners,
     pose_track_label,
     show_timestamp=True,
     show_pose_track_label=True,
+    show_bounding_box=False,
+    bounding_box_corners=None,
     video_duration=datetime.timedelta(seconds=10),
     frame_period=datetime.timedelta(milliseconds=100),
     local_frames_directory='/data/frames',
@@ -189,6 +220,7 @@ def generate_bounding_box_overlay(
     image = cv_utils.read_image(path=str(image_input_path))
     image = overlay_bounding_box(
         image=image,
+        show_bounding_box=show_bounding_box,
         bounding_box_corners=bounding_box_corners,
         show_timestamp=show_timestamp,
         timestamp=timestamp,
@@ -221,7 +253,8 @@ def generate_bounding_box_overlay(
 
 def overlay_bounding_box(
     image,
-    bounding_box_corners,
+    show_bounding_box=True,
+    bounding_box_corners=None,
     show_timestamp=True,
     timestamp=None,
     show_pose_track_label=True,
@@ -245,17 +278,20 @@ def overlay_bounding_box(
     pose_track_label_box_color='#00ff00',
     pose_track_label_box_fill=True,
     pose_track_label_box_alpha=0.5,
-):
-    image = cv_utils.draw_rectangle(
-        original_image=image,
-        coordinates=bounding_box_corners,
-        line_width=bounding_box_line_width,
-        color=bounding_box_color,
-        fill=bounding_box_fill,
-        alpha=bounding_box_alpha
-    )
+):  
+    if show_bounding_box:
+        if bounding_box_corners is None:
+            raise ValueError('Bounding box not specified')
+        image = cv_utils.draw_rectangle(
+            original_image=image,
+            coordinates=bounding_box_corners,
+            line_width=bounding_box_line_width,
+            color=bounding_box_color,
+            fill=bounding_box_fill,
+            alpha=bounding_box_alpha
+        )
     if show_timestamp:
-        if timestamp is None:
+        if show_timestamp is None:
             raise ValueError('Timestamp not specified')
         image = cv_utils.draw_timestamp(
             original_image=image,
