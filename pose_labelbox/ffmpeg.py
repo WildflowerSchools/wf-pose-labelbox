@@ -49,6 +49,11 @@ def generate_bounding_box_overlay_videos(
             image_paths = sorted(pose_track_directory_path.glob(f'*.{overlay_image_extension}'))
             pose_track_start = extract_bounding_box_overlay_timestamp(image_paths[0].stem)
             pose_track_end = extract_bounding_box_overlay_timestamp(image_paths[-1].stem) + frame_period
+            image_list_path = pose_track_directory_path / 'image_list.txt'
+            with open(image_list_path, 'w') as fp:
+                for image_path in image_paths:
+                    fp.write(f'file \'{str(image_path)}\'\n')
+                    fp.write(f'duration {frame_period.total_seconds()}\n')
             output_path = generate_bounding_box_overlay_video_path(
                 inference_id=inference_id,
                 camera_id=camera_id,
