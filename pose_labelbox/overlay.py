@@ -32,6 +32,7 @@ def generate_bounding_box_overlays(
     alphapose_output_parent_directory='/data/alphapose_output',
     show_timestamp=True,
     show_pose_track_label=True,
+    show_no_detection_warning=True,
     local_frames_directory='/data/frames',
     frame_filename_extension='png',
     bounding_box_line_width=1.5,
@@ -53,6 +54,14 @@ def generate_bounding_box_overlays(
     pose_track_label_box_color='#00ff00',
     pose_track_label_box_fill=True,
     pose_track_label_box_alpha=0.5,
+    no_detection_warning_font_scale=2.0,
+    no_detection_warning_text_line_width=1.5,
+    no_detection_warning_text_color='#ffffff',
+    no_detection_warning_text_alpha=1.0,
+    no_detection_warning_box_line_width=1.5,
+    no_detection_warning_box_color='#ff0000',
+    no_detection_warning_box_fill=True,
+    no_detection_warning_box_alpha=0.5,
     progress_bar=False,
     notebook=False,
 ):
@@ -135,6 +144,7 @@ def generate_bounding_box_overlays(
                     timestamp=timestamp,
                     show_bounding_box=show_bounding_box,
                     bounding_box_corners=bounding_box_corners,
+                    show_no_detection_warning=show_no_detection_warning,
                     pose_track_label=pose_track_label,
                     show_timestamp=show_timestamp,
                     show_pose_track_label=show_pose_track_label,
@@ -161,6 +171,14 @@ def generate_bounding_box_overlays(
                     pose_track_label_box_color=pose_track_label_box_color,
                     pose_track_label_box_fill=pose_track_label_box_fill,
                     pose_track_label_box_alpha=pose_track_label_box_alpha,
+                    no_detection_warning_font_scale=no_detection_warning_font_scale,
+                    no_detection_warning_text_line_width=no_detection_warning_text_line_width,
+                    no_detection_warning_text_color=no_detection_warning_text_color,
+                    no_detection_warning_text_alpha=no_detection_warning_text_alpha,
+                    no_detection_warning_box_line_width=no_detection_warning_box_line_width,
+                    no_detection_warning_box_color=no_detection_warning_box_color,
+                    no_detection_warning_box_fill=no_detection_warning_box_fill,
+                    no_detection_warning_box_alpha=no_detection_warning_box_alpha,
                 )            
 
 
@@ -175,6 +193,7 @@ def generate_bounding_box_overlay(
     show_pose_track_label=True,
     show_bounding_box=False,
     bounding_box_corners=None,
+    show_no_detection_warning=True,
     video_duration=datetime.timedelta(seconds=10),
     frame_period=datetime.timedelta(milliseconds=100),
     local_frames_directory='/data/frames',
@@ -198,6 +217,14 @@ def generate_bounding_box_overlay(
     pose_track_label_box_color='#00ff00',
     pose_track_label_box_fill=True,
     pose_track_label_box_alpha=0.5,
+    no_detection_warning_font_scale=2.0,
+    no_detection_warning_text_line_width=1.5,
+    no_detection_warning_text_color='#ffffff',
+    no_detection_warning_text_alpha=1.0,
+    no_detection_warning_box_line_width=1.5,
+    no_detection_warning_box_color='#ff0000',
+    no_detection_warning_box_fill=True,
+    no_detection_warning_box_alpha=0.5,
 ):
     image_input_path = pose_labelbox.core.generate_frame_path(
         environment_id=environment_id,
@@ -226,6 +253,7 @@ def generate_bounding_box_overlay(
         timestamp=timestamp,
         show_pose_track_label=show_pose_track_label,
         pose_track_label=pose_track_label,
+        show_no_detection_warning=show_no_detection_warning,
         bounding_box_line_width=bounding_box_line_width,
         bounding_box_color=bounding_box_color,
         bounding_box_fill=bounding_box_fill,
@@ -245,6 +273,14 @@ def generate_bounding_box_overlay(
         pose_track_label_box_color=pose_track_label_box_color,
         pose_track_label_box_fill=pose_track_label_box_fill,
         pose_track_label_box_alpha=pose_track_label_box_alpha,
+        no_detection_warning_font_scale=no_detection_warning_font_scale,
+        no_detection_warning_text_line_width=no_detection_warning_text_line_width,
+        no_detection_warning_text_color=no_detection_warning_text_color,
+        no_detection_warning_text_alpha=no_detection_warning_text_alpha,
+        no_detection_warning_box_line_width=no_detection_warning_box_line_width,
+        no_detection_warning_box_color=no_detection_warning_box_color,
+        no_detection_warning_box_fill=no_detection_warning_box_fill,
+        no_detection_warning_box_alpha=no_detection_warning_box_alpha,
     )
     cv_utils.write_image(
         image=image,
@@ -259,6 +295,7 @@ def overlay_bounding_box(
     timestamp=None,
     show_pose_track_label=True,
     pose_track_label=None,
+    show_no_detection_warning=True,
     bounding_box_line_width=1.5,
     bounding_box_color='#00ff00',
     bounding_box_fill=False,
@@ -278,6 +315,14 @@ def overlay_bounding_box(
     pose_track_label_box_color='#00ff00',
     pose_track_label_box_fill=True,
     pose_track_label_box_alpha=0.5,
+    no_detection_warning_font_scale=2.0,
+    no_detection_warning_text_line_width=1.5,
+    no_detection_warning_text_color='#ffffff',
+    no_detection_warning_text_alpha=1.0,
+    no_detection_warning_box_line_width=1.5,
+    no_detection_warning_box_color='#ff0000',
+    no_detection_warning_box_fill=True,
+    no_detection_warning_box_alpha=0.5,
 ):  
     if show_bounding_box:
         if bounding_box_corners is None:
@@ -289,6 +334,24 @@ def overlay_bounding_box(
             color=bounding_box_color,
             fill=bounding_box_fill,
             alpha=bounding_box_alpha
+        )
+    if not show_bounding_box and show_no_detection_warning:
+        image_width = image.shape[1]
+        box_center = round(image_width/2)
+        image = cv_utils.draw_text_box(
+            original_image=image,
+            anchor_coordinates=[box_center, 0 + 5],
+            text='No detection',
+            horizontal_alignment='center',
+            vertical_alignment='top',
+            font_scale=no_detection_warning_font_scale,
+            text_line_width=no_detection_warning_text_line_width,
+            text_color=no_detection_warning_text_color,
+            text_alpha=no_detection_warning_text_alpha,
+            box_line_width=no_detection_warning_box_line_width,
+            box_color=no_detection_warning_box_color,
+            box_fill=no_detection_warning_box_fill,
+            box_alpha=no_detection_warning_box_alpha,
         )
     if show_timestamp:
         if show_timestamp is None:
