@@ -338,8 +338,8 @@ def generate_bounding_box_overlay_image_lists(
         for pose_track_directory_path in camera_directory_path.iterdir():
             image_list_path = pose_track_directory_path / 'image_list.txt'
             with open(image_list_path, 'w') as fp:
-                for image_filename in sorted(pose_track_directory_path.glob(f'*.{overlay_image_extension}')):
-                    image_path = pose_track_directory_path / image_filename
+                for image_path in sorted(pose_track_directory_path.glob(f'*.{overlay_image_extension}')):
+                    # image_path = pose_track_directory_path / image_filename
                     fp.write(f'file \'{str(image_path)}\'\n')
                     fp.write(f'duration {frame_period.total_seconds()}\n')
 
