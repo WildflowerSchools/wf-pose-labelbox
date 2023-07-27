@@ -1,7 +1,9 @@
 import pose_labelbox.utils
 import honeycomb_io
 import labelbox as lb
+import pandas as pd
 import slugify
+from collections import OrderedDict
 import pathlib
 import datetime
 import uuid
@@ -323,6 +325,65 @@ def parse_bounding_box_overlay_video_path(
         tzinfo=datetime.timezone.utc
     )
     return pose_track_label, video_start, video_end
+
+def fetch_labels(
+    project_id,
+    frame_period=datetime.timedelta(milliseconds=100),
+    client=None,
+):
+    if client is None:
+        client = generate_labelbox_client()
+    export_params= {
+    "attachments": False,
+    "metadata_fields": True,
+    "data_row_details": False,
+    "project_details": False,
+    "label_details": True,
+    "performance_details": False
+    }
+    filters=None
+    project = client.get_project(project_id)
+    export_task = project.export_v2(params=export_params, filters=filters)
+    export_task.wait_till_done()
+    if export_task.errors:
+        raise Exception(f'Export task errors: {export_task.errors}')
+    data_rows = export_task.result
+    label_data_list = list()
+    for data_row in data_rows:
+        metadata = dict()
+        for metadata_field in data_row.get('metadata_fields'):
+            metadata[metadata_field['schema_name']] = metadata_field['value']
+        inference_id = metadata.get('inference_id')
+        environment_id = metadata.get('environment_id')
+        labeling_period_start = pd.to_datetime(metadata.get('labeling_period_start'))
+        labeling_period_end = pd.to_datetime(metadata.get('labeling_period_end'))
+        camera_id = metadata.get('camera_id')
+        pose_track_2d_label = metadata.get('pose_track_2d_label')
+        pose_track_start = pd.to_datetime(metadata.get('video_start'))
+        pose_track_end = pd.to_datetime(metadata.get('video_end'))
+        num_frames = int(metadata.get('num_frames'))
+        for label in data_row['projects'][project_id]['labels']:
+            for frame_number, frame_data in label['annotations']['frames'].items():
+                frame_number = int(frame_number)
+                timestamp = pose_track_start + (frame_number - 1)*frame_period
+                for classification in frame_data['classifications']:
+                    person_name = classification['radio_answer']['name']
+                    label_data_list.append(OrderedDict([
+                        ('inference_id', inference_id),
+                        ('environment_id', environment_id),
+                        ('labeling_period_start', labeling_period_start),
+                        ('labeling_period_end', labeling_period_end),
+                        ('camera_id', camera_id),
+                        ('pose_track_2d_label', pose_track_2d_label),
+                        ('pose_track_start', pose_track_start),
+                        ('pose_track_end', pose_track_end),
+                        ('num_frames', num_frames),
+                        ('frame_number', frame_number),
+                        ('timestamp', timestamp),
+                        ('person_name', person_name),
+                    ]))
+    label_data = pd.DataFrame(label_data_list)
+    return label_data
 
 def generate_labelbox_client(api_key=None):
     if api_key is None:
