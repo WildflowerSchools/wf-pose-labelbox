@@ -357,7 +357,7 @@ def fetch_labels(
     if export_task.errors:
         raise Exception(f'Export task errors: {export_task.errors}')
     data_rows = export_task.result
-    label_data_list = list()
+    label_data_df_list = list()
     for data_row in data_rows:
         metadata = dict()
         for metadata_field in data_row.get('metadata_fields'):
@@ -387,36 +387,54 @@ def fetch_labels(
             utc=True
         )
         num_frames = int(metadata.get('num_frames'))
-        for label in data_row['projects'][project_id]['labels']:
-            for frame_number, frame_data in label['annotations']['frames'].items():
-                frame_number = int(frame_number)
-                timestamp = pose_track_start + (frame_number - 1)*frame_period
-                for classification in frame_data['classifications']:
-                    person_name = classification['radio_answer']['name']
-                    label_data_list.append(OrderedDict([
-                        ('inference_id', inference_id),
-                        ('environment_id', environment_id),
-                        ('labeling_period_start', labeling_period_start),
-                        ('labeling_period_end', labeling_period_end),
-                        ('camera_id', camera_id),
-                        ('pose_track_2d_label', pose_track_2d_label),
-                        ('pose_track_start', pose_track_start),
-                        ('pose_track_end', pose_track_end),
-                        ('num_frames', num_frames),
-                        ('frame_number', frame_number),
-                        ('timestamp', timestamp),
-                        ('person_name', person_name),
-                    ]))
-    label_data = (
-        pd.DataFrame(label_data_list)
-        .sort_values(
-            [
-                'camera_id',
-                'pose_track_2d_label',
-                'frame_number'
-            ],
-            ignore_index=True
+        labels = data_row['projects'][project_id]['labels']
+        if len(labels) == 0:
+            continue
+        if len(labels) > 1:
+            raise ValueError(f'More than one label found for pose track {pose_track_2d_label}')
+        label = labels[0]
+        pose_track_data_list = list()
+        for frame_number, frame_data in label['annotations']['frames'].items():
+            frame_number = int(frame_number)
+            timestamp = pose_track_start + (frame_number - 1)*frame_period
+            classifications = frame_data['classifications']
+            if len(classifications) == 0:
+                continue
+            if len(classifications) > 1:
+                raise ValueError(f'More than one classification found for frame number {frame_number} in pose track {pose_track_2d_label}')
+            classification = classifications[0]
+            person_name = classifications[0]['radio_answer']['name']
+            pose_track_data_list.append({
+                'timestamp': timestamp,
+                'person_name': person_name
+            })
+        pose_track_data = (
+            pd.DataFrame(pose_track_data_list)
+            .set_index('timestamp')
+            .sort_index()
         )
+        new_index = pd.date_range(
+            start=pose_track_data.index.min(),
+            end=pose_track_data.index.max(),
+            freq=frame_period,
+            name='timestamp'
+        )
+        pose_track_data_filled  = pose_track_data.reindex(
+            index=new_index,
+            method='ffill'
+        )
+        pose_track_data_filled['camera_id'] = camera_id
+        pose_track_data_filled['pose_track_2d_label'] = pose_track_2d_label
+        label_data_df_list.append(pose_track_data_filled)
+    label_data = (
+        pd.concat(label_data_df_list)
+        .reset_index()
+        .set_index([
+            'camera_id',
+            'pose_track_2d_label',
+            'timestamp'
+        ])
+        .sort_index()
     )
     return label_data
 
