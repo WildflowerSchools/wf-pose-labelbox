@@ -5,10 +5,76 @@ import slugify
 import pathlib
 import datetime
 import uuid
+import re
 import os
 import logging
 
 logger = logging.getLogger(__name__)
+
+def create_project(
+    inference_id,
+    ontology_id=None,
+    person_descriptions=None,
+    unusuable_bounding_box_label='Unusable bounding box',
+    person_feature_schema_id=None,
+    dataset_id=None,
+    start=None,
+    end=None,
+    environment_name=None,
+    environment_id=None,
+    video_duration=datetime.timedelta(seconds=10),
+    bounding_box_overlay_video_parent_directory='/data/bounding_box_overlay_videos',
+    overlay_video_extension='mp4',
+    frame_period=datetime.timedelta(milliseconds=100),
+    client=None
+):
+    if client is None:
+        client = generate_labelbox_client()
+    name=f'Identify people ({inference_id})'
+    existing_projects = client.get_projects(where=(lb.Project.name == name))
+    existing_project = existing_projects.get_one()
+    if existing_project is not None:
+        logger.info(f'Person identification project for inference ID {inference_id} already exists. Skipping')
+        return existing_project.uid
+    create_metadata_fields(client)
+    if ontology_id is None:
+        logger.info(f'Person ontology for inference ID {inference_id} not specified. Creating.')
+        ontology_id = create_person_ontology(
+            inference_id=inference_id,
+            person_descriptions=person_descriptions,
+            unusuable_bounding_box_label=unusuable_bounding_box_label,
+            person_feature_schema_id=person_feature_schema_id,
+            client=client,
+        )
+    ontology = client.get_ontology(ontology_id)
+    if dataset_id is None:
+        logger.info(f'Dataset for inference ID {inference_id} not specified. Creating.')
+        dataset_id = create_dataset(
+            start=start,
+            end=end,
+            inference_id=inference_id,
+            environment_name=environment_name,
+            environment_id=environment_id,
+            video_duration=video_duration,
+            bounding_box_overlay_video_parent_directory=bounding_box_overlay_video_parent_directory,
+            overlay_video_extension=overlay_video_extension,
+            frame_period=frame_period,
+            client=client,
+        )
+    dataset = client.get_dataset(dataset_id)
+    logger.info('Creating project')
+    project = client.create_project(
+        name=name,
+        media_type=lb.MediaType.Video
+    )
+    batch_name=f'First batch ({inference_id})'
+    batch = project.create_batch(
+        name=batch_name,
+        data_rows=dataset.export_data_rows(),
+        priority=1
+    )
+    project.setup_editor(ontology)
+    return project.uid
 
 def create_metadata_fields(
     client=None,
@@ -44,6 +110,11 @@ def create_metadata_fields(
         client=client,
     )
     create_metadata_field(
+        name='pose_track_2d_label',
+        metadata_ontology=metadata_ontology,
+        client=client,
+    )
+    create_metadata_field(
         name='video_start',
         kind=lb.schema.data_row_metadata.DataRowMetadataKind('CustomMetadataDateTime'),
         metadata_ontology=metadata_ontology,
@@ -56,7 +127,7 @@ def create_metadata_fields(
         client=client,
     )
     create_metadata_field(
-        name='pose_track_2d_label',
+        name='num_frames',
         metadata_ontology=metadata_ontology,
         client=client,
     )
@@ -80,68 +151,6 @@ def create_metadata_field(
             name=name,
             kind=kind,
         )
-
-def create_project(
-    inference_id,
-    ontology_id=None,
-    person_descriptions=None,
-    unusuable_bounding_box_label='Unusable bounding box',
-    person_feature_schema_id=None,
-    dataset_id=None,
-    start=None,
-    end=None,
-    environment_name=None,
-    environment_id=None,
-    video_duration=datetime.timedelta(seconds=10),
-    bounding_box_overlay_video_parent_directory='/data/bounding_box_overlay_videos',
-    overlay_video_extension='mp4',
-    client=None
-):
-    if client is None:
-        client = generate_labelbox_client()
-    name=f'Identify people ({inference_id})'
-    existing_projects = client.get_projects(where=(lb.Project.name == name))
-    existing_project = existing_projects.get_one()
-    if existing_project is not None:
-        logger.info(f'Person identification project for inference ID {inference_id} already exists. Skipping')
-        return existing_project.uid
-    if ontology_id is None:
-        logger.info(f'Person ontology for inference ID {inference_id} not specified. Creating.')
-        ontology_id = create_person_ontology(
-            inference_id=inference_id,
-            person_descriptions=person_descriptions,
-            unusuable_bounding_box_label=unusuable_bounding_box_label,
-            person_feature_schema_id=person_feature_schema_id,
-            client=client,
-        )
-    ontology = client.get_ontology(ontology_id)
-    if dataset_id is None:
-        logger.info(f'Dataset for inference ID {inference_id} not specified. Creating.')
-        dataset_id = create_dataset(
-            start=start,
-            end=end,
-            inference_id=inference_id,
-            environment_name=environment_name,
-            environment_id=environment_id,
-            video_duration=video_duration,
-            bounding_box_overlay_video_parent_directory=bounding_box_overlay_video_parent_directory,
-            overlay_video_extension=overlay_video_extension,
-            client=client,
-        )
-    dataset = client.get_dataset(dataset_id)
-    logger.info('Creating project')
-    project = client.create_project(
-        name=name,
-        media_type=lb.MediaType.Video
-    )
-    batch_name=f'First batch ({inference_id})'
-    batch = project.create_batch(
-        name=batch_name,
-        data_rows=dataset.export_data_rows(),
-        priority=1
-    )
-    project.setup_editor(ontology)
-    return project.uid
 
 def create_person_ontology(
     inference_id,
@@ -222,6 +231,7 @@ def create_dataset(
     video_duration=datetime.timedelta(seconds=10),
     bounding_box_overlay_video_parent_directory='/data/bounding_box_overlay_videos',
     overlay_video_extension='mp4',
+    frame_period=datetime.timedelta(milliseconds=100),
     client=None,
 ):
     if client is None:
@@ -258,7 +268,8 @@ def create_dataset(
         camera_id = camera_directory_path.name
         logger.info(f'Generating data rows for camera {camera_id}')
         for video_local_path in sorted(camera_directory_path.iterdir()):
-            pose_track_label = video_local_path.stem
+            pose_track_label, video_start, video_end = parse_bounding_box_overlay_video_path(video_local_path)
+            num_frames = round((video_end - video_start)/frame_period)
             logger.info(f'Generating data row for camera {camera_id} and pose track label {pose_track_label}')
             data_id = str(uuid.uuid4())
             video_url = client.upload_file(video_local_path)
@@ -273,12 +284,45 @@ def create_dataset(
                     lb.DataRowMetadataField(name='labeling_period_end',  value=labeling_period_end),
                     lb.DataRowMetadataField(name='camera_id',  value=camera_id),
                     lb.DataRowMetadataField(name='pose_track_2d_label',  value=pose_track_label),
+                    lb.DataRowMetadataField(name='video_start',  value=video_start),
+                    lb.DataRowMetadataField(name='video_end',  value=video_end),
+                    lb.DataRowMetadataField(name='num_frames',  value=str(num_frames)),
                 ]
             })
     create_task = dataset.create_data_rows(datarows)
     create_task.wait_till_done()
     status = create_task.status
     return dataset.uid
+
+bounding_box_overlay_filename_re = re.compile(r'(?P<pose_track_label>[0-9]+)_(?P<start_year_string>[0-9]{4})(?P<start_month_string>[0-9]{2})(?P<start_day_string>[0-9]{2})_(?P<start_hour_string>[0-9]{2})(?P<start_minute_string>[0-9]{2})(?P<start_second_string>[0-9]{2})_(?P<start_microsecond_string>[0-9]{6})_(?P<end_year_string>[0-9]{4})(?P<end_month_string>[0-9]{2})(?P<end_day_string>[0-9]{2})_(?P<end_hour_string>[0-9]{2})(?P<end_minute_string>[0-9]{2})(?P<end_second_string>[0-9]{2})_(?P<end_microsecond_string>[0-9]{6})')
+def parse_bounding_box_overlay_video_path(
+    path
+):
+    m = bounding_box_overlay_filename_re.match(path.stem)
+    if not m:
+        raise ValueError(f'Failed to parse filename \'{filename_stem}\'')
+    pose_track_label = m.group('pose_track_label')
+    video_start = datetime.datetime(
+        year=int(m.group('start_year_string')),
+        month=int(m.group('start_month_string')),
+        day=int(m.group('start_day_string')),
+        hour=int(m.group('start_hour_string')),
+        minute=int(m.group('start_minute_string')),
+        second=int(m.group('start_second_string')),
+        microsecond=int(m.group('start_microsecond_string')),
+        tzinfo=datetime.timezone.utc
+    )
+    video_end = datetime.datetime(
+        year=int(m.group('end_year_string')),
+        month=int(m.group('end_month_string')),
+        day=int(m.group('end_day_string')),
+        hour=int(m.group('end_hour_string')),
+        minute=int(m.group('end_minute_string')),
+        second=int(m.group('end_second_string')),
+        microsecond=int(m.group('end_microsecond_string')),
+        tzinfo=datetime.timezone.utc
+    )
+    return pose_track_label, video_start, video_end
 
 def generate_labelbox_client(api_key=None):
     if api_key is None:
