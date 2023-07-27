@@ -13,6 +13,8 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+LABELBOX_DATETIME_FORMAT = '%Y%m%dT%H-%M-%S.%fUTC'
+
 def create_project(
     inference_id,
     ontology_id=None,
@@ -86,50 +88,55 @@ def create_metadata_fields(
     metadata_ontology = client.get_data_row_metadata_ontology()
     create_metadata_field(
         name='inference_id',
+        kind=lb.schema.data_row_metadata.DataRowMetadataKind('CustomMetadataString'),
         metadata_ontology=metadata_ontology,
         client=client,
     )
     create_metadata_field(
         name='environment_id',
+        kind=lb.schema.data_row_metadata.DataRowMetadataKind('CustomMetadataString'),
         metadata_ontology=metadata_ontology,
         client=client,
     )
     create_metadata_field(
         name='camera_id',
+        kind=lb.schema.data_row_metadata.DataRowMetadataKind('CustomMetadataString'),
         metadata_ontology=metadata_ontology,
         client=client,
     )
     create_metadata_field(
-        name='labeling_period_start',
-        kind=lb.schema.data_row_metadata.DataRowMetadataKind('CustomMetadataDateTime'),
+        name='labeling_period_start_isoformat',
+        kind=lb.schema.data_row_metadata.DataRowMetadataKind('CustomMetadataString'),
         metadata_ontology=metadata_ontology,
         client=client,
     )
     create_metadata_field(
-        name='labeling_period_end',
-        kind=lb.schema.data_row_metadata.DataRowMetadataKind('CustomMetadataDateTime'),
+        name='labeling_period_end_isoformat',
+        kind=lb.schema.data_row_metadata.DataRowMetadataKind('CustomMetadataString'),
         metadata_ontology=metadata_ontology,
         client=client,
     )
     create_metadata_field(
         name='pose_track_2d_label',
+        kind=lb.schema.data_row_metadata.DataRowMetadataKind('CustomMetadataString'),
         metadata_ontology=metadata_ontology,
         client=client,
     )
     create_metadata_field(
-        name='video_start',
-        kind=lb.schema.data_row_metadata.DataRowMetadataKind('CustomMetadataDateTime'),
+        name='video_start_isoformat',
+        kind=lb.schema.data_row_metadata.DataRowMetadataKind('CustomMetadataString'),
         metadata_ontology=metadata_ontology,
         client=client,
     )
     create_metadata_field(
-        name='video_end',
-        kind=lb.schema.data_row_metadata.DataRowMetadataKind('CustomMetadataDateTime'),
+        name='video_end_isoformat',
+        kind=lb.schema.data_row_metadata.DataRowMetadataKind('CustomMetadataString'),
         metadata_ontology=metadata_ontology,
         client=client,
     )
     create_metadata_field(
         name='num_frames',
+        kind=lb.schema.data_row_metadata.DataRowMetadataKind('CustomMetadataString'),
         metadata_ontology=metadata_ontology,
         client=client,
     )
@@ -282,18 +289,20 @@ def create_dataset(
                 lb.DataRow.metadata_fields: [
                     lb.DataRowMetadataField(name='environment_id', value=environment_id),
                     lb.DataRowMetadataField(name='inference_id',  value=inference_id),
-                    lb.DataRowMetadataField(name='labeling_period_start',  value=labeling_period_start),
-                    lb.DataRowMetadataField(name='labeling_period_end',  value=labeling_period_end),
+                    lb.DataRowMetadataField(name='labeling_period_start_isoformat',  value=labeling_period_start.strftime(LABELBOX_DATETIME_FORMAT)),
+                    lb.DataRowMetadataField(name='labeling_period_end_isoformat',  value=labeling_period_end.strftime(LABELBOX_DATETIME_FORMAT)),
                     lb.DataRowMetadataField(name='camera_id',  value=camera_id),
                     lb.DataRowMetadataField(name='pose_track_2d_label',  value=pose_track_label),
-                    lb.DataRowMetadataField(name='video_start',  value=video_start),
-                    lb.DataRowMetadataField(name='video_end',  value=video_end),
+                    lb.DataRowMetadataField(name='video_start_isoformat',  value=video_start.strftime(LABELBOX_DATETIME_FORMAT)),
+                    lb.DataRowMetadataField(name='video_end_isoformat',  value=video_end.strftime(LABELBOX_DATETIME_FORMAT)),
                     lb.DataRowMetadataField(name='num_frames',  value=str(num_frames)),
                 ]
             })
     create_task = dataset.create_data_rows(datarows)
     create_task.wait_till_done()
-    status = create_task.status
+    if create_task.errors:
+        raise Exception(f'Creation task errors: {create_task.errors}')
+    logger.info('Creation task status: {create_task.status}')
     return dataset.uid
 
 bounding_box_overlay_filename_re = re.compile(r'(?P<pose_track_label>[0-9]+)_(?P<start_year_string>[0-9]{4})(?P<start_month_string>[0-9]{2})(?P<start_day_string>[0-9]{2})_(?P<start_hour_string>[0-9]{2})(?P<start_minute_string>[0-9]{2})(?P<start_second_string>[0-9]{2})_(?P<start_microsecond_string>[0-9]{6})_(?P<end_year_string>[0-9]{4})(?P<end_month_string>[0-9]{2})(?P<end_day_string>[0-9]{2})_(?P<end_hour_string>[0-9]{2})(?P<end_minute_string>[0-9]{2})(?P<end_second_string>[0-9]{2})_(?P<end_microsecond_string>[0-9]{6})')
@@ -355,12 +364,28 @@ def fetch_labels(
             metadata[metadata_field['schema_name']] = metadata_field['value']
         inference_id = metadata.get('inference_id')
         environment_id = metadata.get('environment_id')
-        labeling_period_start = pd.to_datetime(metadata.get('labeling_period_start'))
-        labeling_period_end = pd.to_datetime(metadata.get('labeling_period_end'))
+        labeling_period_start = pd.to_datetime(
+            metadata.get('labeling_period_start_isoformat'),
+            format=LABELBOX_DATETIME_FORMAT,
+            utc=True
+        )
+        labeling_period_end = pd.to_datetime(
+            metadata.get('labeling_period_end_isoformat'),
+            format=LABELBOX_DATETIME_FORMAT,
+            utc=True
+        )
         camera_id = metadata.get('camera_id')
-        pose_track_2d_label = metadata.get('pose_track_2d_label')
-        pose_track_start = pd.to_datetime(metadata.get('video_start'))
-        pose_track_end = pd.to_datetime(metadata.get('video_end'))
+        pose_track_2d_label = int(metadata.get('pose_track_2d_label'))
+        pose_track_start = pd.to_datetime(
+            metadata.get('video_start_isoformat'),
+            format=LABELBOX_DATETIME_FORMAT,
+            utc=True
+        )
+        pose_track_end = pd.to_datetime(
+            metadata.get('video_end_isoformat'),
+            format=LABELBOX_DATETIME_FORMAT,
+            utc=True
+        )
         num_frames = int(metadata.get('num_frames'))
         for label in data_row['projects'][project_id]['labels']:
             for frame_number, frame_data in label['annotations']['frames'].items():
@@ -382,7 +407,17 @@ def fetch_labels(
                         ('timestamp', timestamp),
                         ('person_name', person_name),
                     ]))
-    label_data = pd.DataFrame(label_data_list)
+    label_data = (
+        pd.DataFrame(label_data_list)
+        .sort_values(
+            [
+                'camera_id',
+                'pose_track_2d_label',
+                'frame_number'
+            ],
+            ignore_index=True
+        )
+    )
     return label_data
 
 def generate_labelbox_client(api_key=None):
