@@ -1,4 +1,4 @@
-import pose_labelbox.ffmpeg
+import pose_labelbox.process_video
 import pose_labelbox.alphapose
 import pose_labelbox.utils
 import video_io
@@ -231,7 +231,7 @@ def extract_frames(
             camera_id=camera_id,
             video_start=video_start,
         )
-        pose_labelbox.ffmpeg.extract_video_frames(
+        pose_labelbox.process_video.extract_video_frames(
             video_path=video_path,
             frame_directory_path=frame_directory_path,
             ffmpeg_frame_identifier=ffmpeg_frame_identifier,

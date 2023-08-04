@@ -4,7 +4,7 @@ from pathlib import Path
 import toml
 
 from .core import *
-from .ffmpeg import *
+from .process_video import *
 from .alphapose import *
 from .overlay import *
 from .labelbox import *
